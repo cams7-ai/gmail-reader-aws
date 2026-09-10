@@ -1,0 +1,14 @@
+version = 0.1
+
+[default.build.parameters]
+cached = true
+parallel = true
+
+[default.deploy.parameters]
+stack_name = "gmail-reader"
+region = "us-east-2"
+capabilities = "CAPABILITY_IAM"
+confirm_changeset = true
+resolve_s3 = true
+profile = "<perfil-aws-local>"
+parameter_overrides = "GmailOAuthSecretArn=<arn-do-segredo> SenderEmail=logincaixa@caixa.gov.br WaitTimeoutSeconds=15"

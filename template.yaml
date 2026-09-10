@@ -1,0 +1,103 @@
+AWSTemplateFormatVersion: "2010-09-09"
+Description: >-
+  Gmail Reader serverless API — uses a native Lambda handler to keep the HTTP
+  integration small and independent of an ASGI framework.
+
+Metadata:
+  AWSToolsMetrics:
+    AWSAgentToolkit: aws-cloudformation@2
+  "com.aws.cloudformation.Context":
+    arch: HTTP API v2 -> native Python Lambda -> Secrets Manager + Gmail API
+    must:
+      - expose only GET /api/v1/validation-code during the controlled smoke test
+      - add authorization before exposing the endpoint in production
+      - keep OAuth credentials out of parameters and environment variables
+    ref:
+      - at: docs/AWS_SAM_MIGRATION_STEP_BY_STEP.md
+        has: migration steps + design and security constraints
+        scope: local
+
+Parameters:
+  GmailOAuthSecretArn:
+    Type: String
+    Description: ARN of the Secrets Manager secret containing the Gmail OAuth credentials.
+    AllowedPattern: "^arn:(aws[a-zA-Z-]*)?:secretsmanager:[a-z0-9-]+:[0-9]{12}:secret:.+$"
+    ConstraintDescription: Must be a valid AWS Secrets Manager secret ARN.
+  SenderEmail:
+    Type: String
+    Description: Gmail sender address used to filter validation-code messages.
+    Default: logincaixa@caixa.gov.br
+  SubjectFilter:
+    Type: String
+    Description: Gmail subject text used to filter validation-code messages.
+    Default: Código de Validação
+  ActivationCodeRegex:
+    Type: String
+    Description: Regular expression used to extract the activation code from an email.
+    Default: "Código de ativação: \\d+"
+  WaitTimeoutSeconds:
+    Type: Number
+    Description: Maximum time the handler waits for a matching Gmail message.
+    Default: 15
+    MinValue: 0
+    MaxValue: 15
+
+Transform: AWS::Serverless-2016-10-31
+
+Globals:
+  Function:
+    Runtime: python3.12
+    Architectures: [x86_64]
+    MemorySize: 256
+    Timeout: 25
+    Tracing: Active
+    Environment:
+      Variables:
+        GMAIL_OAUTH_SECRET_ARN: !Ref GmailOAuthSecretArn
+        SENDER_EMAIL: !Ref SenderEmail
+        SUBJECT_FILTER: !Ref SubjectFilter
+        ACTIVATION_CODE_REGEX: !Ref ActivationCodeRegex
+        WAIT_TIMEOUT_SECONDS: !Ref WaitTimeoutSeconds
+
+Resources:
+  GmailReaderHttpApi:
+    Type: AWS::Serverless::HttpApi
+    Properties:
+      StageName: $default
+
+  GmailReaderFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: src/
+      Handler: lambda_handler.handler
+      Policies:
+        - Version: "2012-10-17"
+          Statement:
+            - Sid: ReadGoogleOAuthSecret
+              Effect: Allow
+              Action: secretsmanager:GetSecretValue
+              Resource: !Ref GmailOAuthSecretArn
+      Events:
+        ValidationCodeEndpoint:
+          Type: HttpApi
+          Properties:
+            ApiId: !Ref GmailReaderHttpApi
+            Path: /api/v1/validation-code
+            Method: GET
+            PayloadFormatVersion: "2.0"
+
+  GmailReaderFunctionLogGroup:
+    Type: AWS::Logs::LogGroup
+    DeletionPolicy: Delete
+    UpdateReplacePolicy: Delete
+    Properties:
+      LogGroupName: !Sub "/aws/lambda/${GmailReaderFunction}"
+      RetentionInDays: 14
+
+Outputs:
+  ApiUrl:
+    Description: Base URL of the Gmail Reader HTTP API.
+    Value: !Sub "https://${GmailReaderHttpApi}.execute-api.${AWS::Region}.${AWS::URLSuffix}"
+  FunctionName:
+    Description: Name of the native Gmail Reader Lambda function.
+    Value: !Ref GmailReaderFunction

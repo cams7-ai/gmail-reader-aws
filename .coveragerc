@@ -1,0 +1,19 @@
+[coverage:run]
+source = src
+omit =
+    tests/*
+    src/__init__.py
+    .venv/*
+    */site-packages/*
+
+[coverage:report]
+exclude_lines =
+    pragma: no cover
+    @abstractmethod
+    def __repr__
+    if TYPE_CHECKING:
+show_missing = True
+fail_under = 100
+
+[coverage:html]
+directory = htmlcov

@@ -1,0 +1,46 @@
+# IDE
+.idea/
+.vscode/
+
+# Ambiente virtual
+.venv/
+venv/
+env/
+
+# Credenciais e tokens OAuth2 (NUNCA versionar)
+GmailAPI/
+*.json
+!env.local.example.json
+
+# Variáveis de ambiente
+.env
+.env.*
+!.env.example
+
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+*.egg-info/
+dist/
+build/
+*.egg
+*.whl
+
+# Testes e cobertura
+.pytest_cache/
+.coverage
+.coverage.*
+htmlcov/
+coverage.xml
+
+# Sistema operativo
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# AWS SAM
+.aws-sam/
+samconfig.toml
+env.local.json
