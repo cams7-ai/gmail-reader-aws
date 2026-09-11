@@ -42,7 +42,7 @@ def aws_settings(settings):
     return replace(
         settings,
         gmail_oauth_secret_arn=(
-            "arn:aws:secretsmanager:us-east-2:123456789012:"
+            "arn:aws:secretsmanager:us-east-1:123456789012:"
             "secret:gmail-reader/google-oauth-token"
         ),
     )

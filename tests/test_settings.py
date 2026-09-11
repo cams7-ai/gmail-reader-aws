@@ -91,7 +91,7 @@ class TestSettingsFromEnv:
 
     def test_gmail_oauth_secret_arn_from_env(self, monkeypatch):
         secret_arn = (
-            "arn:aws:secretsmanager:us-east-2:123456789012:"
+            "arn:aws:secretsmanager:us-east-1:123456789012:"
             "secret:gmail-reader/google-oauth-token"
         )
         monkeypatch.setenv("GMAIL_OAUTH_SECRET_ARN", secret_arn)
@@ -112,7 +112,7 @@ class TestSettingsFrozen:
 
     def test_replace_timeout_preserves_gmail_oauth_secret_arn(self):
         secret_arn = (
-            "arn:aws:secretsmanager:us-east-2:123456789012:"
+            "arn:aws:secretsmanager:us-east-1:123456789012:"
             "secret:gmail-reader/google-oauth-token"
         )
         settings = Settings(gmail_oauth_secret_arn=secret_arn)

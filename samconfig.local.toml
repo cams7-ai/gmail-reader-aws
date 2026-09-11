@@ -6,7 +6,7 @@ parallel = true
 
 [default.deploy.parameters]
 stack_name = "gmail-reader"
-region = "us-east-2"
+region = "us-east-1"
 capabilities = "CAPABILITY_IAM"
 confirm_changeset = true
 resolve_s3 = true

@@ -2,7 +2,7 @@
 
 Este roteiro adapta o projeto atual para uma arquitetura serverless com handler Lambda nativo, preservando o contrato do endpoint de código de validação e a Gmail API. Ele parte do guia do `mail-sender-aws`, mas trata OAuth2 do Google, token sensível, espera síncrona e ausência de disco persistente.
 
-Premissas: Windows/PowerShell, Python 3.12, AWS CLI, SAM CLI, Docker Desktop, perfil AWS configurado e região `us-east-2`. Substitua valores entre `<...>`.
+Premissas: Windows/PowerShell, Python 3.12, AWS CLI, SAM CLI, Docker Desktop, perfil AWS configurado e região `us-east-1`. Substitua valores entre `<...>`.
 
 ## 1. Arquitetura alvo
 
@@ -27,7 +27,7 @@ Na Lambda não existe navegador interativo, o pacote é somente leitura e `/tmp`
 
 ```powershell
 $AwsProfile = "<perfil-aws-local>"
-$AwsRegion = "us-east-2"
+$AwsRegion = "us-east-1"
 $StackName = "gmail-reader"
 $OAuthSecretName = "gmail-reader/google-oauth-token"
 $TokenPath = "file://GmailAPI/token.json"
@@ -463,7 +463,7 @@ parallel = true
 
 [default.deploy.parameters]
 stack_name = "gmail-reader"
-region = "us-east-2"
+region = "us-east-1"
 capabilities = "CAPABILITY_IAM"
 confirm_changeset = true
 resolve_s3 = true
