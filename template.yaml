@@ -60,13 +60,13 @@ Globals:
         WAIT_TIMEOUT_SECONDS: !Ref WaitTimeoutSeconds
 
 Resources:
-  GmailReaderHttpApi:
-    Type: AWS::Serverless::HttpApi
-    Properties:
-      StageName: $default
-
   GmailReaderFunction:
     Type: AWS::Serverless::Function
+    Metadata:
+      com.aws.cloudformation.Context:
+        why: returns a validation code through IAM-authorized direct Lambda invocation
+        must:
+          - do not expose a public HTTP event for the LotoBot integration
     Properties:
       CodeUri: src/
       Handler: lambda_handler.handler
@@ -77,14 +77,6 @@ Resources:
               Effect: Allow
               Action: secretsmanager:GetSecretValue
               Resource: !Ref GmailOAuthSecretArn
-      Events:
-        ValidationCodeEndpoint:
-          Type: HttpApi
-          Properties:
-            ApiId: !Ref GmailReaderHttpApi
-            Path: /api/v1/validation-code
-            Method: GET
-            PayloadFormatVersion: "2.0"
 
   GmailReaderFunctionLogGroup:
     Type: AWS::Logs::LogGroup
@@ -95,9 +87,9 @@ Resources:
       RetentionInDays: 14
 
 Outputs:
-  ApiUrl:
-    Description: Base URL of the Gmail Reader HTTP API.
-    Value: !Sub "https://${GmailReaderHttpApi}.execute-api.${AWS::Region}.${AWS::URLSuffix}"
+  FunctionArn:
+    Description: Lambda ARN consumed by the LotoBot role.
+    Value: !GetAtt GmailReaderFunction.Arn
   FunctionName:
     Description: Name of the native Gmail Reader Lambda function.
     Value: !Ref GmailReaderFunction

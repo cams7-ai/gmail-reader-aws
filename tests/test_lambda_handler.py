@@ -37,6 +37,13 @@ def clear_repository_cache():
     _create_repository.cache_clear()
 
 
+def test_handler_accepts_direct_lambda_invocation():
+    with patch("lambda_handler._create_repository"), patch("lambda_handler.ValidationCodeService") as service_class:
+        service_class.return_value.get_validation_code = AsyncMock(return_value="123456")
+        response = handler({"waitTimeoutSeconds": "15"}, None)
+    assert response["statusCode"] == 200
+
+
 def _body(response):
     return json.loads(response["body"])
 

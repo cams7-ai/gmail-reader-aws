@@ -268,7 +268,7 @@ O Docker Desktop deve estar em execução. Copie o exemplo e informe um ARN real
 
 ```powershell
 $AwsProfile = "<perfil-aws-local>"
-$AwsRegion = "us-east-1"
+$AwsRegion = "sa-east-1"
 Copy-Item env.local.example.json env.local.json
 sam build --use-container
 sam local start-api --env-vars env.local.json --profile $AwsProfile --region $AwsRegion
@@ -390,7 +390,7 @@ No primeiro deploy, use o modo guiado ou preencha `samconfig.toml`:
 
 ```powershell
 $AwsProfile = "<perfil-aws-local>"
-$AwsRegion = "us-east-1"
+$AwsRegion = "sa-east-1"
 $OAuthSecretArn = "<arn-do-segredo>"
 
 sam deploy --guided `

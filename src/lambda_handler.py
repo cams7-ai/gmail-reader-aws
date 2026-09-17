@@ -46,9 +46,10 @@ def _parse_wait_timeout_seconds(value: str | None) -> int | None:
 
 def handler(event: dict[str, Any], context: Any) -> dict[str, Any]:
     del context
+    direct_invocation = "requestContext" not in event
     request_context = event.get("requestContext") or {}
     http = request_context.get("http") or {}
-    if (
+    if not direct_invocation and (
         http.get("method") != "GET"
         or http.get("path") != "/api/v1/validation-code"
     ):
@@ -56,8 +57,7 @@ def handler(event: dict[str, Any], context: Any) -> dict[str, Any]:
             404,
             {"error": {"code": "NOT_FOUND", "message": "Rota não encontrada."}},
         )
-
-    query = event.get("queryStringParameters") or {}
+    query = event if direct_invocation else (event.get("queryStringParameters") or {})
     try:
         timeout = _parse_wait_timeout_seconds(query.get("waitTimeoutSeconds"))
     except ValueError:

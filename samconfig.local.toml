@@ -6,9 +6,11 @@ parallel = true
 
 [default.deploy.parameters]
 stack_name = "gmail-reader"
-region = "us-east-1"
+region = "sa-east-1"
 capabilities = "CAPABILITY_IAM"
+image_repositories = []
 confirm_changeset = true
 resolve_s3 = true
-profile = "<perfil-aws-local>"
-parameter_overrides = "GmailOAuthSecretArn=<arn-do-segredo> SenderEmail=logincaixa@caixa.gov.br WaitTimeoutSeconds=15"
+s3_prefix = "gmail-reader"
+profile = "<perfil-aws>"
+parameter_overrides = "GmailOAuthSecretArn=\"<arn-do-segredo>\" WaitTimeoutSeconds=15"
