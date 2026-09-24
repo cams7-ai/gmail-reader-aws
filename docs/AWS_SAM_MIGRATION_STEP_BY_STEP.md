@@ -4,13 +4,13 @@ Este guia corresponde ao [`template.yaml`](../template.yaml) vigente. A função
 
 ## Arquitetura e segurança
 
-Fluxo: `loto-bot` EC2 → endpoint privado do serviço Lambda → `GmailReaderFunction` → Secrets Manager → Gmail API.
+Fluxo: `loto-bot` EC2 → endpoint privado do serviço Lambda → `GmailReaderFunction` na mesma VPC/subnet dual-stack → Secrets Manager e Gmail API por IPv6.
 
 - `GMAIL_READER_URL` não é usado na AWS; o consumidor recebe o ARN em `GMAIL_READER_FUNCTION_NAME`;
 - não há `X-API-Key`, `INTEGRATION_API_TOKEN` ou segredo compartilhado;
 - IAM autoriza o `loto-bot` a invocar somente esta função;
 - a função lê somente o segredo OAuth indicado por `GmailOAuthSecretArn`;
-- o acesso da Lambda à API do Gmail continua saindo para a internet.
+- o acesso da Lambda ao Secrets Manager e à API do Gmail sai por IPv6; `AWS_USE_DUALSTACK_ENDPOINT=true` seleciona endpoints AWS dual-stack e não há NAT IPv4 nessa arquitetura.
 
 ## Pré-requisitos
 
@@ -19,12 +19,37 @@ Fluxo: `loto-bot` EC2 → endpoint privado do serviço Lambda → `GmailReaderFu
 - projeto OAuth do Google/Gmail configurado;
 - refresh token válido obtido em ambiente local;
 - identidade AWS com acesso a CloudFormation, Lambda, IAM, Logs, S3 e Secrets Manager;
+- `$VpcId` e `$SubnetId` obtidos nas etapas de criação da rede do [`loto-bot`](../../../loto-bot/docs/AWS_FREE_TIER_MIGRATION_WITH_PROXY_SOCKS5_STEP_BY_STEP.md);
+- subnet dual-stack com rota `::/0` e DNS da VPC habilitado;
 - mesma conta e região usadas pelo `loto-bot`, salvo configuração cross-account explícita.
 
 ```powershell
+$AppName = "loto-bot"
 $AwsProfile = "<perfil>"
-$AwsRegion = "sa-east-1"
+$AwsRegion = "us-east-1"
 $StackName = "gmail-reader"
+$VpcId = aws ec2 describe-vpcs `
+    --filters "Name=tag:Name,Values=$AppName" `
+              "Name=tag:Application,Values=$AppName" `
+    --query "Vpcs[0].VpcId" `
+    --region $AwsRegion `
+    --profile $AwsProfile `
+    --output text
+$AvailabilityZone = aws ec2 describe-availability-zones `
+  --filters "Name=state,Values=available" `
+  --query "AvailabilityZones[0].ZoneName" `
+  --region $AwsRegion `
+  --profile $AwsProfile `
+  --output text
+$SubnetId = aws ec2 describe-subnets `
+    --filters "Name=vpc-id,Values=$VpcId" `
+              "Name=availability-zone,Values=$AvailabilityZone" `
+              "Name=tag:Name,Values=$AppName" `
+              "Name=tag:Application,Values=$AppName" `
+    --query "Subnets[0].SubnetId" `
+    --region $AwsRegion `
+    --profile $AwsProfile `
+    --output text
 ```
 
 ## Segredo OAuth
@@ -60,11 +85,21 @@ sam deploy `
   --region $AwsRegion `
   --profile $AwsProfile `
   --parameter-overrides `
+    VpcId=$VpcId `
+    SubnetId=$SubnetId `
     GmailOAuthSecretArn=$GmailOAuthSecretArn `
     WaitTimeoutSeconds=15
 ```
 
 O timeout solicitado pelo consumidor deve permanecer entre 0 e 15 segundos. A Lambda tem timeout total de 25 segundos.
+
+Confirme antes do deploy que a subnet pertence à VPC compartilhada e possui IPv6:
+
+```powershell
+aws ec2 describe-subnets --subnet-ids $SubnetId `
+  --query "Subnets[0].{VpcId:VpcId,Ipv4:CidrBlock,Ipv6:Ipv6CidrBlockAssociationSet[0].Ipv6CidrBlock}" `
+  --output table --region $AwsRegion --profile $AwsProfile
+```
 
 ## Entregar o ARN ao `loto-bot`
 
@@ -117,6 +152,8 @@ Rotacione o refresh token atualizando o mesmo segredo. Para código ou infraestr
 - [ ] Refresh token válido armazenado somente no Secrets Manager.
 - [ ] Testes, `sam validate` e `sam build` aprovados.
 - [ ] Nenhum evento API Gateway ou Function URL configurado.
+- [ ] `VpcId` e `SubnetId` são os mesmos usados pelo `loto-bot`.
+- [ ] Subnet dual-stack possui rota IPv6 e a função está com `Ipv6AllowedForDualStack`.
 - [ ] Output `FunctionArn` entregue ao `loto-bot`.
 - [ ] Role do consumidor limitada a este ARN.
 - [ ] Role da função limitada ao segredo OAuth.

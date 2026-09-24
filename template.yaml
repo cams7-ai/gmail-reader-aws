@@ -18,6 +18,12 @@ Metadata:
         scope: local
 
 Parameters:
+  VpcId:
+    Type: AWS::EC2::VPC::Id
+    Description: VPC compartilhada criada pelo procedimento do loto-bot.
+  SubnetId:
+    Type: AWS::EC2::Subnet::Id
+    Description: Subnet dual-stack compartilhada criada pelo procedimento do loto-bot.
   GmailOAuthSecretArn:
     Type: String
     Description: ARN of the Secrets Manager secret containing the Gmail OAuth credentials.
@@ -53,6 +59,7 @@ Globals:
     Tracing: Active
     Environment:
       Variables:
+        AWS_USE_DUALSTACK_ENDPOINT: "true"
         GMAIL_OAUTH_SECRET_ARN: !Ref GmailOAuthSecretArn
         SENDER_EMAIL: !Ref SenderEmail
         SUBJECT_FILTER: !Ref SubjectFilter
@@ -60,6 +67,35 @@ Globals:
         WAIT_TIMEOUT_SECONDS: !Ref WaitTimeoutSeconds
 
 Resources:
+  GmailReaderSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Metadata:
+      com.aws.cloudformation.Context:
+        why: attaches Gmail Reader to the LotoBot VPC while allowing DNS and IPv6 HTTPS egress
+        must:
+          - VpcId and SubnetId must identify the shared dual-stack LotoBot network
+          - keep outbound IPv6 HTTPS for Secrets Manager and Gmail
+        mutable: change-with-constraints
+    Properties:
+      GroupDescription: Outbound access for Gmail Reader in the shared LotoBot VPC
+      VpcId: !Ref VpcId
+      SecurityGroupEgress:
+        - Description: HTTPS over IPv6 to AWS and Gmail APIs
+          IpProtocol: tcp
+          FromPort: 443
+          ToPort: 443
+          CidrIpv6: ::/0
+        - Description: DNS UDP through the VPC resolver
+          IpProtocol: udp
+          FromPort: 53
+          ToPort: 53
+          CidrIp: 0.0.0.0/0
+        - Description: DNS TCP through the VPC resolver
+          IpProtocol: tcp
+          FromPort: 53
+          ToPort: 53
+          CidrIp: 0.0.0.0/0
+
   GmailReaderFunction:
     Type: AWS::Serverless::Function
     Metadata:
@@ -67,10 +103,18 @@ Resources:
         why: returns a validation code through IAM-authorized direct Lambda invocation
         must:
           - do not expose a public HTTP event for the LotoBot integration
+          - keep IPv6 enabled because the shared subnet has no IPv4 internet route
     Properties:
       CodeUri: src/
       Handler: lambda_handler.handler
+      VpcConfig:
+        SecurityGroupIds:
+          - !Ref GmailReaderSecurityGroup
+        SubnetIds:
+          - !Ref SubnetId
+        Ipv6AllowedForDualStack: true
       Policies:
+        - AWSLambdaVPCAccessExecutionRole
         - Version: "2012-10-17"
           Statement:
             - Sid: ReadGoogleOAuthSecret

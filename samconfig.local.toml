@@ -6,11 +6,11 @@ parallel = true
 
 [default.deploy.parameters]
 stack_name = "gmail-reader"
-region = "sa-east-1"
+region = "us-east-1"
 capabilities = "CAPABILITY_IAM"
 image_repositories = []
 confirm_changeset = true
 resolve_s3 = true
 s3_prefix = "gmail-reader"
 profile = "<perfil-aws>"
-parameter_overrides = "GmailOAuthSecretArn=\"<arn-do-segredo>\" WaitTimeoutSeconds=15"
+parameter_overrides = "VpcId=\"<loto-bot-vpc-id>\" SubnetId=\"<loto-bot-subnet-id>\" GmailOAuthSecretArn=\"<arn-do-segredo>\" WaitTimeoutSeconds=15"
