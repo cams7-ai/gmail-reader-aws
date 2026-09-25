@@ -1,9 +1,8 @@
 # Gmail Reader AWS
 
-API serverless em Python 3.12 para monitorar uma conta Gmail via Gmail API e
-extrair automaticamente códigos de validação recebidos por e-mail. A entrada
-HTTP é tratada diretamente por uma função AWS Lambda integrada ao Amazon API
-Gateway HTTP API.
+Função serverless em Python 3.12 para consultar a Gmail API e extrair códigos
+de validação. O LotoBot invoca a Lambda diretamente com IAM; o template não
+publica API Gateway nem Function URL.
 
 No desenvolvimento local, o fluxo OAuth2 do Google pode abrir o navegador na
 primeira execução e salvar o token em `GmailAPI/token.json`. Na AWS, o token é
@@ -29,10 +28,10 @@ lido do AWS Secrets Manager e o login interativo nunca é iniciado.
 | Item | Descrição |
 | --- | --- |
 | Nome | `gmail-reader-aws` |
-| Tipo | API REST serverless |
+| Tipo | Função Lambda para integração interna |
 | Objetivo | Aguardar um novo e-mail de validação e retornar o código numérico encontrado |
 | Linguagem | Python 3.12+ |
-| Entrada HTTP | API Gateway HTTP API payload v2.0 |
+| Entrada | Evento direto com `waitTimeoutSeconds` |
 | Computação | AWS Lambda com handler nativo |
 | Integração externa | Gmail API com OAuth2 |
 | Segredo em produção | AWS Secrets Manager |
@@ -57,8 +56,8 @@ oferece Swagger UI, ReDoc ou documento OpenAPI.
 | Tecnologia | Uso |
 | --- | --- |
 | Python 3.12 | Runtime da aplicação e da Lambda |
-| AWS Lambda | Execução do handler HTTP nativo |
-| Amazon API Gateway HTTP API | Endpoint HTTPS e integração payload v2.0 |
+| AWS Lambda | Execução do handler de invocação direta |
+| IAM Lambda Invoke | Invocação direta pelo LotoBot |
 | AWS Secrets Manager | Armazenamento do token OAuth2 na AWS |
 | AWS SAM / CloudFormation | Infraestrutura, build e deploy |
 | Amazon CloudWatch Logs | Logs com retenção de 14 dias |
@@ -70,13 +69,12 @@ oferece Swagger UI, ReDoc ou documento OpenAPI.
 
 ## Arquitetura
 
-O projeto separa a entrada HTTP, a regra de negócio, o acesso ao Gmail, a
+O projeto separa a entrada da Lambda, a regra de negócio, o acesso ao Gmail, a
 autenticação e a configuração.
 
 ```mermaid
 flowchart LR
-    Client["Cliente HTTP"] --> ApiGateway["API Gateway HTTP API"]
-    ApiGateway --> Handler["Lambda handler\nsrc/lambda_handler.py"]
+    Client["LotoBot EC2"] -->|Lambda Invoke IAM| Handler["Lambda handler\nsrc/lambda_handler.py"]
     Handler --> Service["ValidationCodeService\nsrc/services"]
     Service --> Repository["GmailRepository\nsrc/repositories"]
     Repository --> Gmail["Gmail API"]
@@ -130,7 +128,7 @@ Responsabilidades principais:
 
 | Camada | Responsabilidade |
 | --- | --- |
-| `lambda_handler.py` | Validar evento HTTP, criar dependências e formatar respostas proxy |
+| `lambda_handler.py` | Validar evento direto, criar dependências e formatar a resposta |
 | `services` | Aguardar novas mensagens e extrair o código |
 | `repositories` | Consultar mensagens e metadados pela Gmail API |
 | `infra` | Autenticar via OAuth2 e configurar logging |
@@ -141,15 +139,13 @@ Responsabilidades principais:
 
 ```mermaid
 sequenceDiagram
-    participant Client as Cliente
-    participant APIGW as API Gateway
+    participant Client as LotoBot
     participant Lambda as Lambda handler
     participant Service as ValidationCodeService
     participant Repo as GmailRepository
     participant Gmail as Gmail API
 
-    Client->>APIGW: GET /api/v1/validation-code
-    APIGW->>Lambda: Evento HTTP API v2.0
+    Client->>Lambda: Invoke {waitTimeoutSeconds}
     Lambda->>Service: get_validation_code()
     Service->>Repo: list_message_ids(query="", limit=1)
     Repo->>Gmail: Buscar último e-mail recebido
@@ -162,8 +158,7 @@ sequenceDiagram
 
         alt Nova mensagem com código
             Service-->>Lambda: Código extraído
-            Lambda-->>APIGW: Resposta proxy 200
-            APIGW-->>Client: JSON com o código
+            Lambda-->>Client: statusCode 200 e body JSON
         else Sem nova mensagem válida
             Service->>Service: Aguardar até 1 segundo
         end
@@ -270,31 +265,23 @@ O Docker Desktop deve estar em execução. Copie o exemplo e informe um ARN real
 $AwsProfile = "<perfil-aws-local>"
 $AwsRegion = "us-east-1"
 Copy-Item env.local.example.json env.local.json
+'{"waitTimeoutSeconds": "3"}' | Set-Content -Encoding utf8 event.json
 sam build --use-container
-sam local start-api --env-vars env.local.json --profile $AwsProfile --region $AwsRegion
+sam local invoke GmailReaderFunction --env-vars env.local.json --event event.json --profile $AwsProfile --region $AwsRegion
 ```
 
-Endpoint local:
+Conteúdo de `event.json`:
 
-```text
-http://127.0.0.1:3000/api/v1/validation-code
+```json
+{"waitTimeoutSeconds": "3"}
 ```
 
-## Contrato da API
+## Contrato da invocação
 
-### Endpoint
+### Evento
 
-| Método | Endpoint | Descrição |
-| --- | --- | --- |
-| `GET` | `/api/v1/validation-code` | Aguarda uma nova mensagem e retorna o código extraído |
-
-Outros métodos e caminhos retornam `404 NOT_FOUND`. Não existem endpoints de
-documentação ou esquema OpenAPI.
-
-### Query string
-
-```http
-GET /api/v1/validation-code?waitTimeoutSeconds=3
+```json
+{"waitTimeoutSeconds": "3"}
 ```
 
 | Parâmetro | Tipo | Obrigatório | Descrição |
@@ -303,7 +290,7 @@ GET /api/v1/validation-code?waitTimeoutSeconds=3
 
 ### Resposta de sucesso
 
-Status HTTP `200`:
+Resposta da Lambda com `statusCode=200`:
 
 ```json
 {
@@ -333,8 +320,8 @@ Todos os erros usam o envelope:
 | `500` | `AUTHENTICATION_ERROR` | Falha ao autenticar na Gmail API |
 | `500` | `GMAIL_API_CONNECTION_ERROR` | Falha temporária de conexão ou TLS |
 
-O `body` retornado pelo handler é sempre uma string JSON, conforme o contrato de
-integração proxy do API Gateway HTTP API.
+O `body` retornado pelo handler é sempre uma string JSON. O envelope
+`statusCode`/`body` é preservado porque o cliente LotoBot o consome.
 
 ## Logging
 
@@ -372,7 +359,7 @@ Regras dos testes:
 
 - não acessar Gmail ou AWS reais;
 - usar mocks para mensagens, autenticação e Secrets Manager;
-- cobrir o handler HTTP nativo e os limites de timeout;
+- cobrir o handler de invocação direta e os limites de timeout;
 - garantir que informações sensíveis não sejam registradas;
 - manter a cobertura mínima configurada em 100%.
 
@@ -412,10 +399,10 @@ O roteiro completo de migração, validação, deploy, segurança e rollback est
 - O timeout da Lambda é 25 segundos e o orçamento de espera é limitado a 15.
 - O cliente Gmail é reaproveitado no mesmo ambiente de execução da Lambda.
 - O segredo OAuth é criado fora da stack e não é removido por `sam delete`.
-- O endpoint do template ainda não possui authorizer e serve apenas para smoke
-  tests controlados.
-- Antes da produção, configure autenticação, throttling, concorrência reservada,
-  alarmes e orçamento AWS.
+- O template não publica endpoint HTTP. O acesso é limitado por `lambda:InvokeFunction`
+  no ARN da função e por IAM no segredo OAuth.
+- Após rotação do token, a Lambda limpa o cache ao encontrar falha de refresh e
+  lê a nova versão do segredo uma vez. Teste antes de revogar o token anterior.
 - Para trocar a conta local, remova `GmailAPI/token.json` e repita o login.
 - Se o token na AWS for revogado, gere-o localmente e publique uma nova versão no
   Secrets Manager.

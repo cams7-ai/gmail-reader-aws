@@ -179,6 +179,21 @@ def test_handler_returns_authentication_error():
     }
 
 
+def test_handler_reloads_cached_credentials_after_refresh_failure():
+    with (
+        patch("lambda_handler._create_repository") as repository,
+        patch("lambda_handler.ValidationCodeService") as service_class,
+    ):
+        service_class.return_value.get_validation_code = AsyncMock(
+            side_effect=[RefreshError("expired"), "123456"]
+        )
+        response = handler(_event("0"), None)
+
+    assert response["statusCode"] == 200
+    repository.cache_clear.assert_called_once_with()
+    assert service_class.call_count == 2
+
+
 @pytest.mark.parametrize(
     "error",
     [ConnectionError("connection failed"), TimeoutError(), ssl.SSLError()],
