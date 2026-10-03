@@ -175,6 +175,7 @@ gmail-reader-aws/
 |-- GmailAPI/                         # Credenciais e token OAuth locais; ignorado pelo Git
 |-- docs/
 |   |-- AWS_SAM_MIGRATION_STEP_BY_STEP.md
+|   |-- AWS_SAM_MIGRATION_STEP_BY_STEP_LINUX.md
 |   `-- env.local.example.json
 |-- src/
 |   |-- config/                       # Settings carregadas do ambiente
@@ -388,8 +389,11 @@ sam deploy --guided `
   --parameter-overrides GmailOAuthSecretArn=$OAuthSecretArn
 ```
 
-O roteiro completo de migração, validação, deploy, segurança e rollback está em
-[docs/AWS_SAM_MIGRATION_STEP_BY_STEP.md](docs/AWS_SAM_MIGRATION_STEP_BY_STEP.md).
+Os roteiros completos de migração, validação, deploy, segurança e rollback estão
+disponíveis por plataforma:
+
+- [Windows / PowerShell](docs/AWS_SAM_MIGRATION_STEP_BY_STEP.md)
+- [Linux / Bash](docs/AWS_SAM_MIGRATION_STEP_BY_STEP_LINUX.md)
 
 ## Observações operacionais
 
