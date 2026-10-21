@@ -44,11 +44,21 @@ def _parse_wait_timeout_seconds(value: str | None) -> int | None:
     return timeout
 
 
+def _get_validation_code(settings: Settings) -> str:
+    try:
+        return asyncio.run(ValidationCodeService(_create_repository(), settings).get_validation_code())
+    except RefreshError:
+        # A warm execution environment may still hold credentials from a rotated secret.
+        _create_repository.cache_clear()
+        return asyncio.run(ValidationCodeService(_create_repository(), settings).get_validation_code())
+
+
 def handler(event: dict[str, Any], context: Any) -> dict[str, Any]:
     del context
+    direct_invocation = "requestContext" not in event
     request_context = event.get("requestContext") or {}
     http = request_context.get("http") or {}
-    if (
+    if not direct_invocation and (
         http.get("method") != "GET"
         or http.get("path") != "/api/v1/validation-code"
     ):
@@ -56,8 +66,7 @@ def handler(event: dict[str, Any], context: Any) -> dict[str, Any]:
             404,
             {"error": {"code": "NOT_FOUND", "message": "Rota não encontrada."}},
         )
-
-    query = event.get("queryStringParameters") or {}
+    query = event if direct_invocation else (event.get("queryStringParameters") or {})
     try:
         timeout = _parse_wait_timeout_seconds(query.get("waitTimeoutSeconds"))
     except ValueError:
@@ -76,8 +85,7 @@ def handler(event: dict[str, Any], context: Any) -> dict[str, Any]:
         settings = replace(settings, wait_timeout_seconds=timeout)
 
     try:
-        service = ValidationCodeService(_create_repository(), settings)
-        code = asyncio.run(service.get_validation_code())
+        code = _get_validation_code(settings)
     except ValidationCodeTimeoutError as exc:
         return _response(
             500,

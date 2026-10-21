@@ -1,16 +1,14 @@
 AWSTemplateFormatVersion: "2010-09-09"
 Description: >-
-  Gmail Reader serverless API — uses a native Lambda handler to keep the HTTP
-  integration small and independent of an ASGI framework.
+  Gmail Reader Lambda — handles IAM-authorized direct invocations without a customer VPC.
 
 Metadata:
   AWSToolsMetrics:
     AWSAgentToolkit: aws-cloudformation@2
   "com.aws.cloudformation.Context":
-    arch: HTTP API v2 -> native Python Lambda -> Secrets Manager + Gmail API
+    arch: LotoBot EC2 -> IAM-authorized Lambda Invoke -> Secrets Manager + Gmail API
     must:
-      - expose only GET /api/v1/validation-code during the controlled smoke test
-      - add authorization before exposing the endpoint in production
+      - do not expose an HTTP event for the internal LotoBot integration
       - keep OAuth credentials out of parameters and environment variables
     ref:
       - at: docs/AWS_SAM_MIGRATION_STEP_BY_STEP.md
@@ -60,13 +58,14 @@ Globals:
         WAIT_TIMEOUT_SECONDS: !Ref WaitTimeoutSeconds
 
 Resources:
-  GmailReaderHttpApi:
-    Type: AWS::Serverless::HttpApi
-    Properties:
-      StageName: $default
-
   GmailReaderFunction:
     Type: AWS::Serverless::Function
+    Metadata:
+      com.aws.cloudformation.Context:
+        why: returns a validation code through IAM-authorized direct Lambda invocation
+        must:
+          - do not expose a public HTTP event for the LotoBot integration
+          - keep the function outside the customer VPC because it uses only public service APIs
     Properties:
       CodeUri: src/
       Handler: lambda_handler.handler
@@ -77,14 +76,6 @@ Resources:
               Effect: Allow
               Action: secretsmanager:GetSecretValue
               Resource: !Ref GmailOAuthSecretArn
-      Events:
-        ValidationCodeEndpoint:
-          Type: HttpApi
-          Properties:
-            ApiId: !Ref GmailReaderHttpApi
-            Path: /api/v1/validation-code
-            Method: GET
-            PayloadFormatVersion: "2.0"
 
   GmailReaderFunctionLogGroup:
     Type: AWS::Logs::LogGroup
@@ -95,9 +86,9 @@ Resources:
       RetentionInDays: 14
 
 Outputs:
-  ApiUrl:
-    Description: Base URL of the Gmail Reader HTTP API.
-    Value: !Sub "https://${GmailReaderHttpApi}.execute-api.${AWS::Region}.${AWS::URLSuffix}"
+  FunctionArn:
+    Description: Lambda ARN consumed by the LotoBot role.
+    Value: !GetAtt GmailReaderFunction.Arn
   FunctionName:
     Description: Name of the native Gmail Reader Lambda function.
     Value: !Ref GmailReaderFunction
